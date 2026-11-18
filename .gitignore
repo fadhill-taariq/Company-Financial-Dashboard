@@ -1,0 +1,13 @@
+# Local settings (contains your API keys)
+config.json
+.env
+
+# Python
+__pycache__/
+*.pyc
+.pytest_cache/
+venv/
+.venv/
+
+# Runtime
+*.log
