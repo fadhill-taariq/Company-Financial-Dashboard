@@ -1,0 +1,19 @@
+{
+    "default_symbol": "NVDA",
+    "benchmark_symbol": "SPY",
+    "benchmark_name": "S&P 500 (SPY)",
+    "providers": {
+        "market_data": "finnhub",
+        "price_history": "alpha_vantage",
+        "company_news": "finnhub",
+        "market_news": "finnhub"
+    },
+    "api_keys": {
+        "finnhub": "",
+        "alpha_vantage": "",
+        "newsapi": ""
+    },
+    "company_news_count": 3,
+    "market_news_count": 5,
+    "cache_minutes": 10
+}

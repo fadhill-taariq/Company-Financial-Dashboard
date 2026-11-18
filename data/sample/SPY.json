@@ -1,0 +1,22 @@
+{
+ "_note": "Illustrative sample figures for offline use and tests. Not real market data.",
+ "profile": {
+  "symbol": "SPY",
+  "name": "SPDR S&P 500 ETF Trust",
+  "exchange": "NYSE ARCA",
+  "currency": "USD",
+  "country": "US",
+  "industry": "Exchange Traded Fund",
+  "logo": null,
+  "website": null
+ },
+ "quote": {
+  "price": 668.2,
+  "change": 3.4,
+  "change_pct": 0.51,
+  "high": 669.5,
+  "low": 663.1,
+  "open": 664.0,
+  "prev_close": 664.8
+ }
+}

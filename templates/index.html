@@ -1,0 +1,489 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta http-equiv="refresh" content="60;url='/index'">
+  <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
+  <meta name="description" content="Company financial dashboard: key metrics, price chart and news for any listed company.">
+  {% set p = company.profile %}
+  {% set q = company.quote %}
+  {% set m = company.metrics %}
+  {% set cur = p.currency or "USD" %}
+  <title>{{ p.symbol }} · Company Dashboard</title>
+
+  <!-- Bootstrap 4.6.2 (MIT licence), bundled so the page works offline -->
+  <link rel="stylesheet" href="/static/css/bootstrap.min.css">
+
+  <style>
+    :root {
+      --bg: #f3f5f8;
+      --panel: #ffffff;
+      --border: #dde2ea;
+      --text: #1f2933;
+      --muted: #6b7684;
+      --accent: #2563eb;
+      --accent-soft: #eef3fe;
+      --up: #006300;
+      --down: #b42318;
+      --series: #2a78d6;
+      --grid: #e1e0d9;
+      --axis: #c3c2b7;
+    }
+    body {
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    }
+    .site-header {
+      background: var(--panel);
+      border-bottom: 1px solid var(--border);
+      padding: 1rem 0;
+      margin-bottom: 1.5rem;
+    }
+    .brand { display: flex; align-items: center; min-width: 0; }
+    .logo {
+      width: 48px; height: 48px; border-radius: 10px; margin-right: .85rem;
+      border: 1px solid var(--border); object-fit: contain; background: #fff; flex-shrink: 0;
+    }
+    .logo-letter {
+      display: flex; align-items: center; justify-content: center;
+      background: var(--accent-soft); color: var(--accent); font-weight: 700; font-size: 1.3rem;
+    }
+    .site-header h1 { font-size: 1.5rem; margin: 0; font-weight: 600; }
+    .site-header .subtitle { color: var(--muted); font-size: .875rem; }
+    .price-block { text-align: right; }
+    @media (max-width: 767.98px) { .price-block { text-align: left; padding-left: calc(15px + 48px + .85rem); } }
+    .price { font-size: 1.75rem; font-weight: 600; line-height: 1.1; font-variant-numeric: tabular-nums; }
+    .price-sub { color: var(--muted); font-size: .8rem; margin-top: .2rem; }
+
+    .up { color: var(--up); }
+    .down { color: var(--down); }
+    .flat { color: var(--muted); }
+    .delta { font-weight: 600; font-variant-numeric: tabular-nums; white-space: nowrap; }
+
+    .search-form { display: flex; gap: .5rem; }
+    .search-form input { min-width: 0; }
+
+    .panel {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1.25rem;
+      margin-bottom: 1.5rem;
+      box-shadow: 0 1px 2px rgba(16, 24, 40, .04);
+    }
+    .panel-title {
+      font-size: .8rem;
+      font-weight: 600;
+      letter-spacing: .06em;
+      text-transform: uppercase;
+      color: var(--muted);
+      border-bottom: 1px solid var(--border);
+      padding-bottom: .6rem;
+      margin-bottom: 1rem;
+      display: flex; justify-content: space-between; align-items: baseline; gap: .5rem;
+    }
+    .panel-title .aside { text-transform: none; letter-spacing: 0; font-weight: 500; }
+
+    .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: .75rem; }
+    .stat {
+      border: 1px solid var(--border);
+      border-left: 4px solid var(--accent);
+      border-radius: 8px;
+      padding: .65rem .85rem;
+      background: #fbfcfe;
+      min-width: 0;
+    }
+    .stat.wide { grid-column: 1 / -1; }
+    .stat-label { font-size: .78rem; color: var(--muted); line-height: 1.3; }
+    .stat-value { font-size: 1.35rem; font-weight: 600; margin-top: .2rem; font-variant-numeric: tabular-nums; }
+    .stat-value.na { font-size: 1rem; font-weight: 500; color: var(--muted); }
+
+    .range-track { position: relative; height: 6px; background: var(--grid); border-radius: 3px; margin: .6rem 0 .35rem; }
+    .range-marker {
+      position: absolute; top: -4px; width: 14px; height: 14px; margin-left: -7px;
+      border-radius: 50%; background: var(--series); border: 2px solid #fff;
+      box-shadow: 0 0 0 1px var(--series);
+    }
+    .range-ends { display: flex; justify-content: space-between; font-size: .78rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+    .chart-wrap { position: relative; }
+    .chart-wrap svg { width: 100%; height: auto; display: block; touch-action: none; }
+    .chart-wrap .grid { stroke: var(--grid); stroke-width: 1; }
+    .chart-wrap .baseline { stroke: var(--axis); stroke-width: 1; }
+    .chart-wrap .tick { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+    .chart-wrap .line { fill: none; stroke: var(--series); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+    .chart-wrap .crosshair { stroke: var(--muted); stroke-width: 1; }
+    .chart-wrap .hover-dot { fill: var(--series); stroke: #fff; stroke-width: 2; }
+    .chart-tip {
+      position: absolute; pointer-events: none; background: var(--panel);
+      border: 1px solid var(--border); border-radius: 6px; padding: .3rem .55rem;
+      font-size: .8rem; box-shadow: 0 2px 6px rgba(16, 24, 40, .1); white-space: nowrap;
+      transform: translate(-50%, -115%);
+    }
+    .chart-tip strong { font-variant-numeric: tabular-nums; }
+    .chart-table { font-size: .8rem; max-height: 220px; overflow-y: auto; }
+    details summary { color: var(--accent); font-size: .8rem; cursor: pointer; margin-top: .6rem; }
+
+    .source-note { color: var(--muted); font-size: .8rem; margin: .9rem 0 0; }
+    .notes { color: var(--muted); font-size: .75rem; margin: .35rem 0 0; padding-left: 1rem; }
+
+    .item {
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: .75rem .9rem;
+      margin-bottom: .75rem;
+      background: var(--panel);
+    }
+    .item:last-child { margin-bottom: 0; }
+    .item-head { display: flex; align-items: flex-start; justify-content: space-between; gap: .5rem; }
+    .item-title { font-weight: 600; font-size: .95rem; line-height: 1.35; }
+    .item-title a { color: var(--text); }
+    .item-meta { color: var(--muted); font-size: .75rem; margin-top: .2rem; }
+    .item-body { color: var(--muted); font-size: .875rem; margin-top: .35rem; }
+    .update-item { background: var(--accent-soft); border-color: #cfdcfb; }
+    .match { display: block; padding: .45rem .6rem; border-radius: 6px; color: var(--text); }
+    .match:hover { background: var(--accent-soft); text-decoration: none; color: var(--text); }
+    .match .sym { font-weight: 600; margin-right: .35rem; }
+    .match .typ { color: var(--muted); font-size: .75rem; }
+
+    .dismiss {
+      border: none; background: none; color: var(--muted);
+      font-size: 1.25rem; line-height: 1; padding: 0 .2rem; cursor: pointer;
+    }
+    .dismiss:hover { color: var(--text); }
+
+    .empty { color: var(--muted); font-size: .875rem; margin: 0; }
+    .form-check { margin-bottom: .4rem; }
+    footer { color: var(--muted); font-size: .8rem; text-align: center; padding: .5rem 0 2rem; }
+  </style>
+</head>
+
+<body>
+  {% macro arrow(value) -%}
+    {%- set d = value | direction -%}
+    {%- if d == "up" %}▲{% elif d == "down" %}▼{% else %}●{% endif -%}
+  {%- endmacro %}
+
+  {% macro delta(value) -%}
+    {%- if value is none -%}<span class="flat">Not available</span>
+    {%- else -%}<span class="delta {{ value | direction }}">{{ arrow(value) }} {{ value | pct }}</span>{%- endif -%}
+  {%- endmacro %}
+
+  {% macro stat(label, text, raw) %}
+  <div class="stat">
+    <div class="stat-label">{{ label }}</div>
+    {% if raw is none %}
+    <div class="stat-value na">Not available</div>
+    {% else %}
+    <div class="stat-value">{{ text }}</div>
+    {% endif %}
+  </div>
+  {% endmacro %}
+
+  {% macro stat_delta(label, value) %}
+  <div class="stat">
+    <div class="stat-label">{{ label }}</div>
+    {% if value is none %}
+    <div class="stat-value na">Not available</div>
+    {% else %}
+    <div class="stat-value">{{ delta(value) }}</div>
+    {% endif %}
+  </div>
+  {% endmacro %}
+
+  {% macro news_item(article) %}
+  <article class="item">
+    <div class="item-head">
+      <div class="item-title">
+        {% if article.url %}<a href="{{ article.url }}" target="_blank" rel="noopener">{{ article.title }}</a>{% else %}{{ article.title }}{% endif %}
+      </div>
+      <form action="/index" method="get">
+        <button type="submit" class="dismiss" aria-label="Dismiss article" title="Dismiss article" name="notif" value="{{ article.url or article.title }}">&times;</button>
+      </form>
+    </div>
+    <div class="item-meta">
+      {{ article.source }}{% if article.source and article.published %} · {% endif %}{% if article.published %}{{ article.published.strftime("%d %b, %H:%M UTC") }}{% endif %}
+    </div>
+    {% if article.summary %}
+    <div class="item-body">{{ article.summary | truncate(200) }}</div>
+    {% endif %}
+  </article>
+  {% endmacro %}
+
+  <header class="site-header">
+    <div class="container">
+      <div class="row align-items-center">
+        <div class="col-md-5 brand mb-2 mb-md-0">
+          {% if p.logo %}
+          <img class="logo" src="{{ p.logo }}" alt="">
+          {% else %}
+          <div class="logo logo-letter" aria-hidden="true">{{ (p.name or p.symbol)[:1] }}</div>
+          {% endif %}
+          <div style="min-width:0">
+            <h1 class="text-truncate">{{ p.name }}</h1>
+            <div class="subtitle text-truncate">
+              {{ p.symbol }}{% if p.exchange %} · {{ p.exchange }}{% endif %}{% if p.industry %} · {{ p.industry }}{% endif %}
+            </div>
+          </div>
+        </div>
+        <div class="col-md-3 col-12 price-block">
+          {% if q %}
+          <div class="price">{{ q.price | money(cur) }}</div>
+          <div>
+            {% set d = q.change_pct | direction %}
+            <span class="delta {{ d }}">{{ arrow(q.change_pct) }} {% if q.change is not none %}{{ "%+.2f" | format(q.change) }} {% endif %}({{ q.change_pct | pct }})</span>
+          </div>
+          <div class="price-sub">{{ company.benchmark.name }} today: {{ company.benchmark.change_pct | pct }}</div>
+          {% endif %}
+        </div>
+        <div class="col-md-4 col-12 mt-3 mt-md-0">
+          <form class="search-form" action="/index" method="get" role="search">
+            <label for="company-search" class="sr-only">Company name or ticker</label>
+            <input id="company-search" name="company" class="form-control" placeholder="Company or ticker, e.g. Apple" value="{{ query }}" required>
+            <button class="btn btn-primary" type="submit">Go</button>
+          </form>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <main class="container">
+    {% if error %}
+    <div class="alert alert-warning py-2" role="alert">{{ error }}</div>
+    {% endif %}
+    {% if company.is_sample %}
+    <div class="alert alert-info py-2" role="status">
+      Showing <strong>sample data</strong>: illustrative figures, not real market data. Add a Finnhub API key to config.json to see live figures.
+    </div>
+    {% endif %}
+
+    <div class="row">
+
+      <!-- KEY FIGURES, CHART AND SCHEDULING COLUMN -->
+      <div class="col-lg-5 order-lg-2">
+        {% if not company.available %}
+        <section class="panel">
+          <div class="panel-title">Key figures</div>
+          <p class="empty">{{ company.message }}</p>
+        </section>
+        {% else %}
+        <section class="panel">
+          <div class="panel-title">Key figures <span class="aside">{{ p.symbol }} vs {{ company.benchmark.name }}</span></div>
+          <div class="stat-grid">
+            {{ stat("Market cap", m.market_cap | money(cur, compact=True), m.market_cap) }}
+            {{ stat("P/E ratio (TTM)", m.pe | number, m.pe) }}
+            {{ stat("Earnings per share (TTM)", m.eps | money(cur), m.eps) }}
+            {{ stat("Beta (volatility vs market)", m.beta | number, m.beta) }}
+            {{ stat("Dividend yield", m.dividend_yield | pct(signed=False), m.dividend_yield) }}
+            {{ stat("Net profit margin (TTM)", m.net_margin | pct(signed=False, places=1), m.net_margin) }}
+            {{ stat_delta("Revenue growth (year on year)", m.revenue_growth) }}
+            {{ stat_delta("Return, last 5 days", m.return_5d) }}
+            {{ stat_delta("Return, year to date", m.return_ytd) }}
+            {{ stat_delta("Return, last 52 weeks", m.return_52w) }}
+            {{ stat_delta("Relative to S&P 500, 52 weeks", m.rel_sp500_52w) }}
+            {% set gap = (q.change_pct - company.benchmark.change_pct) if (q and q.change_pct is not none and company.benchmark.change_pct is not none) else none %}
+            {{ stat_delta("Today vs " ~ company.benchmark.name, gap) }}
+
+            {% set pos = range_position(q.price if q else none, m.week52_low, m.week52_high) %}
+            <div class="stat wide">
+              <div class="stat-label">52-week range</div>
+              {% if pos is none %}
+              <div class="stat-value na">Not available</div>
+              {% else %}
+              <div class="range-track" role="img" aria-label="Current price is {{ '%.0f' | format(pos) }}% of the way from the 52-week low to the 52-week high">
+                <div class="range-marker" style="left: {{ '%.1f' | format(pos) }}%"></div>
+              </div>
+              <div class="range-ends">
+                <span>Low {{ m.week52_low | money(cur) }}</span>
+                <span>Now {{ q.price | money(cur) }}</span>
+                <span>High {{ m.week52_high | money(cur) }}</span>
+              </div>
+              {% endif %}
+            </div>
+          </div>
+          <p class="source-note">
+            Data source: {{ company.source }} · Updated {{ company.updated.strftime("%H:%M, %d %b") }} ·
+            <a href="/index?refresh=1">Refresh now</a>
+          </p>
+          {% if company.notes %}
+          <ul class="notes">
+            {% for note in company.notes %}<li>{{ note }}</li>{% endfor %}
+          </ul>
+          {% endif %}
+        </section>
+
+        <section class="panel">
+          <div class="panel-title">
+            Closing price
+            {% if chart %}<span class="aside">Last {{ chart.points | length }} trading days · {{ delta(chart.change_pct) }}</span>{% endif %}
+          </div>
+          {% if chart %}
+          <div class="chart-wrap" id="price-chart">
+            <svg viewBox="0 0 {{ chart.width }} {{ chart.height }}" role="img"
+                 aria-label="{{ p.symbol }} closing price from {{ chart.start_date }} to {{ chart.end_date }}, between {{ chart.low | money(cur) }} and {{ chart.high | money(cur) }}">
+              {% for g in chart.gridlines %}
+              <line class="{{ 'baseline' if loop.first else 'grid' }}" x1="{{ chart.plot_left }}" x2="{{ chart.plot_right }}" y1="{{ g.y }}" y2="{{ g.y }}"></line>
+              <text class="tick" x="{{ chart.plot_left - 8 }}" y="{{ g.y + 4 }}" text-anchor="end">{{ g.label }}</text>
+              {% endfor %}
+              {% for x in chart.x_labels %}
+              <text class="tick" x="{{ x.x }}" y="{{ chart.height - 6 }}" text-anchor="middle">{{ x.label }}</text>
+              {% endfor %}
+              <polyline class="line" points="{{ chart.polyline }}"></polyline>
+              <line class="crosshair" id="crosshair" y1="{{ chart.plot_top }}" y2="{{ chart.plot_bottom }}" visibility="hidden"></line>
+              <circle class="hover-dot" id="hover-dot" r="5" visibility="hidden"></circle>
+              <rect id="hit-area" x="{{ chart.plot_left }}" y="{{ chart.plot_top }}" width="{{ chart.plot_right - chart.plot_left }}" height="{{ chart.plot_bottom - chart.plot_top }}" fill="transparent"></rect>
+            </svg>
+            <div class="chart-tip" id="chart-tip" hidden><span id="tip-date"></span> · <strong id="tip-value"></strong></div>
+          </div>
+          <details>
+            <summary>Show as table</summary>
+            <div class="chart-table">
+              <table class="table table-sm mb-0">
+                <thead><tr><th>Date</th><th class="text-right">Close</th></tr></thead>
+                <tbody>
+                  {% for point in chart.points | reverse %}
+                  <tr><td>{{ point.date }}</td><td class="text-right">{{ point.close | money(cur) }}</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </details>
+          <script type="application/json" id="chart-data">{{ chart.points | tojson }}</script>
+          {% else %}
+          <p class="empty">No price history. Add an Alpha Vantage API key to config.json to see the chart.</p>
+          {% endif %}
+        </section>
+        {% endif %}
+
+        <section class="panel">
+          <div class="panel-title">Schedule an update</div>
+          <form action="/index" method="get">
+            <div class="form-row">
+              <div class="form-group col-5">
+                <label for="update-time" class="small text-muted mb-1">Time</label>
+                <input id="update-time" type="time" name="update" class="form-control" required>
+              </div>
+              <div class="form-group col-7">
+                <label for="update-label" class="small text-muted mb-1">Label</label>
+                <input id="update-label" name="two" class="form-control" placeholder="e.g. Market open" required>
+              </div>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="market-data" value="market-data" id="opt-market">
+              <label class="form-check-label" for="opt-market">Update market data</label>
+            </div>
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" name="news" value="news" id="opt-news">
+              <label class="form-check-label" for="opt-news">Update news</label>
+            </div>
+            <div class="form-check mb-3">
+              <input class="form-check-input" type="checkbox" name="repeat" value="repeat" id="opt-repeat">
+              <label class="form-check-label" for="opt-repeat">Repeat every day</label>
+            </div>
+            <button class="btn btn-primary btn-block" type="submit">Schedule update</button>
+          </form>
+        </section>
+      </div>
+
+      <!-- SEARCH RESULTS AND SCHEDULED UPDATES COLUMN -->
+      <div class="col-lg-3 order-lg-1">
+        {% if matches %}
+        <section class="panel">
+          <div class="panel-title">Did you mean</div>
+          {% for match in matches %}
+          <a class="match" href="/index?symbol={{ match.symbol | urlencode }}">
+            <span class="sym">{{ match.symbol }}</span>{{ match.name }}
+            {% if match.type %}<div class="typ">{{ match.type }}</div>{% endif %}
+          </a>
+          {% endfor %}
+        </section>
+        {% endif %}
+
+        <section class="panel">
+          <div class="panel-title">Scheduled updates</div>
+          {% for update in updates %}
+          <div class="item update-item">
+            <div class="item-head">
+              <div class="item-title">{{ update['title'] }}</div>
+              <form action="/index" method="get">
+                <button type="submit" class="dismiss" aria-label="Cancel update" title="Cancel update" name="update_item" value="{{ update['title'] }}">&times;</button>
+              </form>
+            </div>
+            <div class="item-body">{{ update['content'] }}</div>
+          </div>
+          {% else %}
+          <p class="empty">None yet.</p>
+          {% endfor %}
+        </section>
+      </div>
+
+      <!-- NEWS COLUMN -->
+      <div class="col-lg-4 order-lg-3">
+        <section class="panel">
+          <div class="panel-title">{{ p.name }} news</div>
+          {% for article in company_news %}
+          {{ news_item(article) }}
+          {% else %}
+          <p class="empty">{% if company_news_note %}Company news unavailable: {{ company_news_note }}.{% else %}No recent stories about {{ p.name }}.{% endif %}</p>
+          {% endfor %}
+        </section>
+
+        <section class="panel">
+          <div class="panel-title">Market news</div>
+          {% for article in market_news %}
+          {{ news_item(article) }}
+          {% else %}
+          <p class="empty">{% if market_news_note %}Market news unavailable: {{ market_news_note }}.{% else %}No market headlines right now.{% endif %}</p>
+          {% endfor %}
+        </section>
+      </div>
+
+    </div>
+  </main>
+
+  <footer>Figures may be delayed and are for information only, not investment advice · Page refreshes every minute</footer>
+
+  <script>
+    // Crosshair and tooltip for the price chart. Values are set with
+    // textContent so nothing from the API is ever parsed as HTML.
+    (function () {
+      var wrap = document.getElementById("price-chart");
+      var dataEl = document.getElementById("chart-data");
+      if (!wrap || !dataEl) return;
+      var points = JSON.parse(dataEl.textContent);
+      var svg = wrap.querySelector("svg");
+      var hit = document.getElementById("hit-area");
+      var line = document.getElementById("crosshair");
+      var dot = document.getElementById("hover-dot");
+      var tip = document.getElementById("chart-tip");
+      var symbol = {{ currency_symbol(cur) | tojson }};
+
+      function show(evt) {
+        var box = svg.getBoundingClientRect();
+        var scale = svg.viewBox.baseVal.width / box.width;
+        var x = (evt.clientX - box.left) * scale;
+        var nearest = points[0];
+        points.forEach(function (p) { if (Math.abs(p.x - x) < Math.abs(nearest.x - x)) nearest = p; });
+        line.setAttribute("x1", nearest.x); line.setAttribute("x2", nearest.x);
+        dot.setAttribute("cx", nearest.x); dot.setAttribute("cy", nearest.y);
+        line.setAttribute("visibility", "visible"); dot.setAttribute("visibility", "visible");
+        document.getElementById("tip-date").textContent = new Date(nearest.date + "T00:00:00")
+          .toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
+        document.getElementById("tip-value").textContent = symbol + nearest.close.toLocaleString(undefined,
+          { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+        tip.hidden = false;
+        tip.style.left = (nearest.x / scale) + "px";
+        tip.style.top = (nearest.y / scale) + "px";
+      }
+      function hide() {
+        line.setAttribute("visibility", "hidden"); dot.setAttribute("visibility", "hidden");
+        tip.hidden = true;
+      }
+      hit.addEventListener("pointermove", show);
+      hit.addEventListener("pointerdown", show);
+      hit.addEventListener("pointerleave", hide);
+    })();
+  </script>
+</body>
+</html>
